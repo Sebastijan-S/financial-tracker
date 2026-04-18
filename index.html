@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Kafić Finansije - Jednostavna aplikacija za praćenje finansija kafića">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Kafić Finansije</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- ===== HEADER ===== -->
+    <div class="header">
+      <h1>Kafić Finansije</h1>
+      <div class="tabs">
+        <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
+        <button class="tab" onclick="showTab('dodaj')">Dodaj</button>
+        <button class="tab" onclick="showTab('istorija')">Istorija</button>
+        <button class="tab" onclick="showTab('izvestaj')">Izveštaj</button>
+      </div>
+    </div>
+
+    <!-- ===== DASHBOARD TAB ===== -->
+    <div id="tab-dashboard">
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Prihodi</div>
+          <div class="metric-value green" id="m-prihodi">0 RSD</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Rashodi</div>
+          <div class="metric-value red" id="m-rashodi">0 RSD</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Stanje</div>
+          <div class="metric-value blue" id="m-stanje">0 RSD</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="section">
+          <div class="section-title">Prihodi vs Rashodi (6 mes.)</div>
+          <div style="position:relative;height:200px">
+            <canvas id="chartBar" role="img" aria-label="Bar chart prihodi vs rashodi"></canvas>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Rashodi po kategoriji</div>
+          <div style="position:relative;height:200px">
+            <canvas id="chartPie" role="img" aria-label="Pie chart kategorije rashoda"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Poslednje transakcije</div>
+        <div id="recent-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== DODAJ TAB ===== -->
+    <div id="tab-dodaj" style="display:none">
+      <div class="subtabs">
+        <button class="subtab active" onclick="showSubtab('nova')">Nova transakcija</button>
+        <button class="subtab" onclick="showSubtab('kategorije')">Upravljaj kategorijama</button>
+      </div>
+
+      <!-- Nova transakcija subtab -->
+      <div id="subtab-nova">
+        <div class="section">
+          <div class="type-btns">
+            <button class="btn btn-green" id="btn-prihod" onclick="setType('prihod')">+ Prihod</button>
+            <button class="btn btn-red" id="btn-rashod" onclick="setType('rashod')" style="opacity:.4">- Rashod</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <input type="number" id="f-iznos" placeholder="Iznos (RSD)" min="0" step="0.01">
+              <div class="form-error" id="err-iznos"></div>
+            </div>
+            <div class="form-group">
+              <input type="date" id="f-datum">
+              <div class="form-error" id="err-datum"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <input type="text" id="f-opis" placeholder="Opis (opciono)">
+              <div class="form-error" id="err-opis"></div>
+            </div>
+            <div class="form-group">
+              <select id="f-kat"></select>
+              <div class="form-error" id="err-kat"></div>
+            </div>
+          </div>
+          <button class="btn btn-green btn-full" onclick="dodajTx()">Sačuvaj</button>
+        </div>
+      </div>
+
+      <!-- Upravljaj kategorijama subtab -->
+      <div id="subtab-kategorije" style="display:none">
+        <div class="section">
+          <div class="section-title">Prihodi — kategorije</div>
+          <div class="kat-list" id="kat-list-prihod"></div>
+          <div class="add-kat-row">
+            <input type="text" id="new-kat-prihod" placeholder="Naziv nove kategorije" onkeydown="if(event.key==='Enter') dodajKat('prihod')">
+            <button class="btn btn-green btn-sm" onclick="dodajKat('prihod')">+ Dodaj</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Rashodi — kategorije</div>
+          <div class="kat-list" id="kat-list-rashod"></div>
+          <div class="add-kat-row">
+            <input type="text" id="new-kat-rashod" placeholder="Naziv nove kategorije" onkeydown="if(event.key==='Enter') dodajKat('rashod')">
+            <button class="btn btn-red btn-sm" onclick="dodajKat('rashod')">+ Dodaj</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ISTORIJA TAB ===== -->
+    <div id="tab-istorija" style="display:none">
+      <div class="section">
+        <div class="section-title">Sve transakcije</div>
+        <div class="filter-row">
+          <select id="filter-tip" onchange="renderIstorija()">
+            <option value="">Sve vrste</option>
+            <option value="prihod">Prihodi</option>
+            <option value="rashod">Rashodi</option>
+          </select>
+          <select id="filter-kat" onchange="renderIstorija()">
+            <option value="">Sve kategorije</option>
+          </select>
+          <input type="text" id="filter-search" placeholder="Pretraži..." onkeyup="renderIstorija()" style="flex:1;min-width:150px">
+        </div>
+        <div class="tx-list-wrap" id="istorija-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== IZVESTAJ TAB ===== -->
+    <div id="tab-izvestaj" style="display:none">
+      <div class="section">
+        <div class="section-title">Mesečni pregled</div>
+        <table class="monthly-table">
+          <thead>
+            <tr>
+              <th>Mesec</th>
+              <th class="r">Prihodi</th>
+              <th class="r">Rashodi</th>
+              <th class="r">Razlika</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-body"></tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Rashodi po kategoriji</div>
+        <div style="position:relative;height:260px">
+          <canvas id="chartKat" role="img" aria-label="Bar chart kategorije rashoda"></canvas>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Podaci</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-blue btn-sm" onclick="exportDataJSON()">💾 JSON Backup</button>
+          <button class="btn btn-blue btn-sm" onclick="exportDataCSV()">📊 CSV Export</button>
+          <button class="btn btn-blue btn-sm" onclick="importDataJSON()">📂 Učitaj JSON</button>
+          <button class="btn btn-blue btn-sm" onclick="importDataCSV()">📂 Učitaj CSV</button>
+          <button class="btn btn-red btn-sm" onclick="clearAllData()">🗑️ Obriši sve</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EDIT TRANSACTION MODAL ===== -->
+  <div id="edit-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Uredi Transakciju</h2>
+      <div class="form-group">
+        <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Vrsta</label>
+        <div id="edit-type-display" style="font-size:13px;color:#d0d0e0;padding:8px 0"></div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="edit-iznos" placeholder="Iznos (RSD)" min="0" step="0.01">
+          <div class="form-error" id="err-edit-iznos"></div>
+        </div>
+        <div class="form-group">
+          <input type="date" id="edit-datum">
+          <div class="form-error" id="err-edit-datum"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <input type="text" id="edit-opis" placeholder="Opis (opciono)">
+          <div class="form-error" id="err-edit-opis"></div>
+        </div>
+        <div class="form-group">
+          <select id="edit-kat"></select>
+          <div class="form-error" id="err-edit-kat"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn" onclick="closeEditModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveEditTransaction()">Sačuvaj Promene</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
