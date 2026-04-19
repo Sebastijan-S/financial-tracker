@@ -11,7 +11,7 @@ const Storage = (() => {
 
   const DEFAULT_KATS = {
     prihod: ['Prihod od prodaje', 'Ostali prihodi'],
-    rashod: ['Kirija', 'Atlantic', 'Ramada', 'Knjigovođa', 'Komunalije', 'Sokoj', 'Smart PH', 'Payspot', 'Konty', 'Ostalo']
+    rashod: ['Plate', 'Kirija', 'Atlantic', 'Ramada', 'Knjigovođa', 'Komunalije', 'Sokoj', 'Smart PH', 'Payspot', 'Konty', 'Ostalo']
   };
 
   /**
@@ -179,6 +179,31 @@ const Storage = (() => {
     return false;
   };
 
+  /**
+   * Generic get for any localStorage key
+   */
+  const get = (key) => {
+    try {
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch (e) {
+      console.error(`Error loading ${key}:`, e);
+      return [];
+    }
+  };
+
+  /**
+   * Generic set for any localStorage key
+   */
+  const set = (key, data) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      return true;
+    } catch (e) {
+      console.error(`Error saving ${key}:`, e);
+      return false;
+    }
+  };
+
   return {
     loadTransactions,
     saveTransactions,
@@ -189,6 +214,8 @@ const Storage = (() => {
     exportCSV,
     importCSV,
     clearAll,
+    get,
+    set,
     DEFAULT_KATS
   };
 })();
@@ -242,7 +269,7 @@ const UI = (() => {
    * @param {string} tabName - Tab name to show
    */
   const showTab = (tabName) => {
-    const validTabs = ['dashboard', 'dodaj', 'istorija', 'izvestaj'];
+    const validTabs = ['dashboard', 'dodaj', 'istorija', 'izvestaj', 'zaposleni', 'magacin'];
     validTabs.forEach(tab => {
       const el = document.getElementById(`tab-${tab}`);
       if (el) el.style.display = tab === tabName ? 'block' : 'none';
@@ -258,7 +285,7 @@ const UI = (() => {
    * @param {string} subtabName - Subtab name to show
    */
   const showSubtab = (subtabName) => {
-    const validSubtabs = ['nova', 'kategorije'];
+    const validSubtabs = ['nova', 'kategorije', 'lista-zaposlenih', 'nova-plata', 'lista-proizvoda', 'prijem-robe', 'prodaja'];
     validSubtabs.forEach(subtab => {
       const el = document.getElementById(`subtab-${subtab}`);
       if (el) el.style.display = subtab === subtabName ? 'block' : 'none';
@@ -615,6 +642,248 @@ const Categories = (() => {
     getByType,
     reload
   };
+})();
+
+// ===== EMPLOYEES MODULE =====
+const Employees = (() => {
+  const getAll = () => {
+    const data = Storage.get('employees') || [];
+    return data;
+  };
+
+  const add = (name, position, email, phone, hireDate) => {
+    const employees = getAll();
+    if (!name || !position) return { success: false, errors: { name: 'Ime i pozicija su obavezni' } };
+    
+    const newEmp = {
+      id: Date.now().toString(),
+      name,
+      position,
+      email: email || '',
+      phone: phone || '',
+      hireDate: hireDate || new Date().toISOString().split('T')[0],
+      createdAt: new Date().toISOString()
+    };
+    
+    employees.push(newEmp);
+    Storage.set('employees', employees);
+    return { success: true, data: newEmp };
+  };
+
+  const update = (id, name, position, email, phone, hireDate) => {
+    const employees = getAll();
+    const emp = employees.find(e => e.id === id);
+    if (!emp) return { success: false, message: 'Zaposleni nije pronađen' };
+    if (!name || !position) return { success: false, errors: { name: 'Ime i pozicija su obavezni' } };
+    
+    emp.name = name;
+    emp.position = position;
+    emp.email = email || '';
+    emp.phone = phone || '';
+    emp.hireDate = hireDate;
+    
+    Storage.set('employees', employees);
+    return { success: true, data: emp };
+  };
+
+  const remove = (id) => {
+    const employees = getAll();
+    const filtered = employees.filter(e => e.id !== id);
+    Storage.set('employees', filtered);
+    
+    // Also remove salary records
+    SalaryRecords.removeSalaryRecordsForEmployee(id);
+    
+    return { success: true };
+  };
+
+  const getById = (id) => {
+    return getAll().find(e => e.id === id);
+  };
+
+  const reload = () => {
+    return getAll();
+  };
+
+  return { add, update, remove, getAll, getById, reload };
+})();
+
+// ===== SALARY RECORDS MODULE =====
+const SalaryRecords = (() => {
+  const getAll = () => {
+    const data = Storage.get('salaryRecords') || [];
+    return data;
+  };
+
+  const add = (employeeId, datum, bruto, tax, insurance, other) => {
+    if (!employeeId || !datum || !bruto || bruto <= 0) {
+      return { success: false, errors: { amount: 'Iznos plate mora biti unet' } };
+    }
+
+    const records = getAll();
+    const neto = bruto - (tax || 0) - (insurance || 0) - (other || 0);
+
+    const newRecord = {
+      id: Date.now().toString(),
+      employeeId,
+      datum,
+      bruto: parseFloat(bruto),
+      tax: parseFloat(tax) || 0,
+      insurance: parseFloat(insurance) || 0,
+      other: parseFloat(other) || 0,
+      neto: Math.max(0, neto),
+      createdAt: new Date().toISOString()
+    };
+
+    records.push(newRecord);
+    Storage.set('salaryRecords', records);
+
+    // Auto-add to Finance as expense
+    const emp = Employees.getById(employeeId);
+    if (emp) {
+      const result = Transactions.add(neto, datum, `Plata: ${emp.name}`, 'Plate', 'rashod');
+      if (!result.success) {
+        Storage.set('salaryRecords', records.filter(r => r.id !== newRecord.id));
+        return { success: false, message: 'Greška pri dodavanju u finansije' };
+      }
+    }
+
+    return { success: true, data: newRecord };
+  };
+
+  const getByEmployeeId = (employeeId) => {
+    return getAll().filter(r => r.employeeId === employeeId).sort((a, b) => new Date(b.datum) - new Date(a.datum));
+  };
+
+  const remove = (recordId) => {
+    const records = getAll();
+    const record = records.find(r => r.id === recordId);
+    
+    if (record) {
+      // Remove from transactions
+      const allTx = Transactions.getAll();
+      const txToRemove = allTx.find(t => 
+        t.opis.includes('Plata:') && 
+        t.iznos === record.neto && 
+        t.tip === 'rashod'
+      );
+      if (txToRemove) {
+        Transactions.remove(txToRemove.id);
+      }
+    }
+
+    Storage.set('salaryRecords', records.filter(r => r.id !== recordId));
+    return { success: true };
+  };
+
+  const removeSalaryRecordsForEmployee = (employeeId) => {
+    const records = getAll();
+    const toRemove = records.filter(r => r.employeeId === employeeId);
+    
+    toRemove.forEach(record => {
+      const allTx = Transactions.getAll();
+      const txToRemove = allTx.find(t => 
+        t.opis.includes('Plata:') && 
+        t.iznos === record.neto && 
+        t.tip === 'rashod'
+      );
+      if (txToRemove) {
+        Transactions.remove(txToRemove.id);
+      }
+    });
+
+    Storage.set('salaryRecords', records.filter(r => r.employeeId !== employeeId));
+  };
+
+  return { add, remove, getAll, getByEmployeeId, removeSalaryRecordsForEmployee };
+})();
+
+// ===== INVENTORY MODULE =====
+const Inventory = (() => {
+  const getAll = () => Storage.get('inventory') || [];
+
+  const add = (name, quantity, unitCost, salePrice, minStock) => {
+    if (!name || !unitCost || !salePrice) return { success: false, errors: { name: 'Svi podaci su obavezni' } };
+    const products = getAll();
+    const product = {
+      id: Date.now().toString(),
+      name,
+      quantity: parseInt(quantity) || 0,
+      unitCost: parseFloat(unitCost),
+      salePrice: parseFloat(salePrice),
+      minStock: parseInt(minStock) || 0,
+      createdAt: new Date().toISOString()
+    };
+    products.push(product);
+    Storage.set('inventory', products);
+    return { success: true, data: product };
+  };
+
+  const update = (id, name, quantity, unitCost, salePrice, minStock) => {
+    const products = getAll();
+    const idx = products.findIndex(p => p.id === id);
+    if (idx === -1) return { success: false, message: 'Proizvod nije pronađen' };
+    products[idx] = { ...products[idx], name, quantity: parseInt(quantity), unitCost: parseFloat(unitCost), salePrice: parseFloat(salePrice), minStock: parseInt(minStock) };
+    Storage.set('inventory', products);
+    return { success: true, data: products[idx] };
+  };
+
+  const remove = (id) => {
+    const products = getAll().filter(p => p.id !== id);
+    Storage.set('inventory', products);
+    StockMovements.removeByProduct(id);
+    return { success: true };
+  };
+
+  const getById = (id) => getAll().find(p => p.id === id);
+
+  const updateQuantity = (id, newQty) => {
+    const products = getAll();
+    const idx = products.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      products[idx].quantity = newQty;
+      Storage.set('inventory', products);
+    }
+  };
+
+  return { add, update, remove, getAll, getById, updateQuantity };
+})();
+
+// ===== STOCK MOVEMENTS MODULE =====
+const StockMovements = (() => {
+  const getAll = () => Storage.get('stockMovements') || [];
+
+  const add = (productId, type, quantity, date) => {
+    const movements = getAll();
+    const product = Inventory.getById(productId);
+    if (!product) return { success: false, message: 'Proizvod nije pronađen' };
+
+    const movement = {
+      id: Date.now().toString(),
+      productId,
+      type, // 'in', 'out', 'adjust'
+      quantity: parseInt(quantity),
+      date,
+      createdAt: new Date().toISOString()
+    };
+    movements.push(movement);
+    Storage.set('stockMovements', movements);
+    return { success: true, data: movement };
+  };
+
+  const getByProduct = (productId) => {
+    return getAll().filter(m => m.productId === productId).sort((a, b) => new Date(b.date) - new Date(a.date));
+  };
+
+  const remove = (id) => {
+    Storage.set('stockMovements', getAll().filter(m => m.id !== id));
+  };
+
+  const removeByProduct = (productId) => {
+    Storage.set('stockMovements', getAll().filter(m => m.productId !== productId));
+  };
+
+  return { add, getAll, getByProduct, remove, removeByProduct };
 })();
 
 // ===== CHARTS MODULE =====
@@ -1289,6 +1558,479 @@ function clearAllData() {
   }
 }
 
+// ===== EMPLOYEES TAB HANDLERS =====
+function openAddEmployeeModal() {
+  document.getElementById('employee-modal-title').textContent = 'Dodaj zaposlenog';
+  document.getElementById('emp-name').value = '';
+  document.getElementById('emp-position').value = '';
+  document.getElementById('emp-email').value = '';
+  document.getElementById('emp-phone').value = '';
+  document.getElementById('emp-hire-date').valueAsDate = new Date();
+  document.getElementById('employee-modal').style.display = 'flex';
+  UI.clearErrors();
+}
+
+function closeEmployeeModal() {
+  document.getElementById('employee-modal').style.display = 'none';
+}
+
+function saveEmployee() {
+  const name = document.getElementById('emp-name').value.trim();
+  const position = document.getElementById('emp-position').value.trim();
+  const email = document.getElementById('emp-email').value.trim();
+  const phone = document.getElementById('emp-phone').value.trim();
+  const hireDate = document.getElementById('emp-hire-date').value;
+
+  UI.clearErrors();
+
+  if (!name) {
+    UI.showFieldError('emp-name', 'Ime je obavezno');
+    return;
+  }
+  if (!position) {
+    UI.showFieldError('emp-position', 'Pozicija je obavezna');
+    return;
+  }
+
+  const result = Employees.add(name, position, email, phone, hireDate);
+  if (result.success) {
+    UI.notify('Zaposleni je dodan ✓', 'success');
+    closeEmployeeModal();
+    renderEmployeesList();
+  } else {
+    Object.keys(result.errors || {}).forEach(field => {
+      UI.showFieldError(`emp-${field}`, result.errors[field]);
+    });
+  }
+}
+
+function deleteEmployee(id) {
+  if (!UI.confirm('Obriši zaposlenog? Sve plate će biti izbrisane.')) return;
+  Employees.remove(id);
+  UI.notify('Zaposleni je obrisan', 'success');
+  renderEmployeesList();
+}
+
+function openSalaryModal(empId) {
+  const emp = Employees.getById(empId);
+  if (!emp) return;
+
+  document.getElementById('salary-emp-name').textContent = emp.name;
+  document.getElementById('salary-datum').valueAsDate = new Date();
+  document.getElementById('salary-amount').value = '';
+  document.getElementById('salary-tax').value = '';
+  document.getElementById('salary-insurance').value = '';
+  document.getElementById('salary-other').value = '';
+  document.getElementById('salary-bruto').textContent = '0 RSD';
+  document.getElementById('salary-neto').textContent = '0 RSD';
+
+  document.getElementById('salary-modal').dataset.empId = empId;
+  document.getElementById('salary-modal').style.display = 'flex';
+  UI.clearErrors();
+}
+
+function closeSalaryModal() {
+  document.getElementById('salary-modal').style.display = 'none';
+}
+
+function calculateNet() {
+  const bruto = parseFloat(document.getElementById('salary-amount').value) || 0;
+  const tax = parseFloat(document.getElementById('salary-tax').value) || 0;
+  const insurance = parseFloat(document.getElementById('salary-insurance').value) || 0;
+  const other = parseFloat(document.getElementById('salary-other').value) || 0;
+
+  const neto = Math.max(0, bruto - tax - insurance - other);
+
+  document.getElementById('salary-bruto').textContent = UI.fmt(bruto);
+  document.getElementById('salary-neto').textContent = UI.fmt(neto);
+}
+
+function saveSalaryPayment() {
+  const empId = document.getElementById('salary-modal').dataset.empId;
+  const datum = document.getElementById('salary-datum').value;
+  const bruto = parseFloat(document.getElementById('salary-amount').value);
+  const tax = parseFloat(document.getElementById('salary-tax').value) || 0;
+  const insurance = parseFloat(document.getElementById('salary-insurance').value) || 0;
+  const other = parseFloat(document.getElementById('salary-other').value) || 0;
+
+  UI.clearErrors();
+
+  if (!bruto || bruto <= 0) {
+    UI.showFieldError('salary-amount', 'Iznos je obavezan');
+    return;
+  }
+
+  const result = SalaryRecords.add(empId, datum, bruto, tax, insurance, other);
+  if (result.success) {
+    UI.notify('Plata je isplaćena i dodana u finansije ✓', 'success');
+    closeSalaryModal();
+    renderPayrollList();
+    Render.renderAll();
+  } else {
+    Object.keys(result.errors || {}).forEach(field => {
+      UI.showFieldError(`salary-${field}`, result.errors[field]);
+    });
+  }
+}
+
+function deleteSalaryRecord(recordId) {
+  if (!UI.confirm('Obriši ovu isplatu? Biće izbrisana i iz finansija.')) return;
+  SalaryRecords.remove(recordId);
+  UI.notify('Plata je obrisana', 'success');
+  renderPayrollList();
+  Render.renderAll();
+}
+
+function renderEmployeesList() {
+  const container = document.getElementById('employees-list');
+  const employees = Employees.getAll();
+
+  if (employees.length === 0) {
+    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center">Nema zaposlenih. Dodaj prvi zaposlenog</div>';
+    return;
+  }
+
+  container.innerHTML = employees.map(emp => {
+    const salaries = SalaryRecords.getByEmployeeId(emp.id);
+    const lastSalary = salaries[0];
+
+    return `
+      <div class="employee-card">
+        <div class="employee-info">
+          <div class="employee-name">${emp.name}</div>
+          <div class="employee-detail">Pozicija: <strong>${emp.position}</strong></div>
+          ${emp.phone ? `<div class="employee-detail">Telefon: <strong>${emp.phone}</strong></div>` : ''}
+          ${emp.email ? `<div class="employee-detail">Email: <strong>${emp.email}</strong></div>` : ''}
+          <div class="employee-detail">Od: <strong>${new Date(emp.hireDate).toLocaleDateString('sr-RS')}</strong></div>
+          ${lastSalary ? `<div class="employee-detail" style="color:#4ade80">Poslednja plata: <strong>${UI.fmt(lastSalary.neto)}</strong> (${new Date(lastSalary.datum).toLocaleDateString('sr-RS')})</div>` : ''}
+          ${salaries.length > 0 ? `
+            <div class="salary-history">
+              <div style="font-size:11px;color:#999;margin-bottom:8px;font-weight:600">Istorija plata (${salaries.length}):</div>
+              ${salaries.slice(0, 3).map(s => `
+                <div class="salary-record">
+                  <span class="salary-date">${new Date(s.datum).toLocaleDateString('sr-RS')}</span>
+                  <div class="salary-values">
+                    <span class="salary-bruto">${UI.fmt(s.bruto)}</span>
+                    <span class="salary-neto">${UI.fmt(s.neto)}</span>
+                  </div>
+                  <button class="salary-delete-btn" onclick="deleteSalaryRecord('${s.id}')">✕</button>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+        <div class="employee-actions">
+          <button class="btn btn-blue btn-sm" onclick="openSalaryModal('${emp.id}')">💰 Isplati</button>
+          <button class="btn btn-red btn-sm" onclick="deleteEmployee('${emp.id}')">✕ Obriši</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderPayrollList() {
+  const container = document.getElementById('payroll-list');
+  const employees = Employees.getAll();
+  const date = document.getElementById('pay-datum').value || new Date().toISOString().split('T')[0];
+
+  if (!date) {
+    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center">Izaberi datum za isplate</div>';
+    return;
+  }
+
+  if (employees.length === 0) {
+    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center">Nema zaposlenih</div>';
+    return;
+  }
+
+  container.innerHTML = employees.map(emp => {
+    return `
+      <div class="payroll-item">
+        <div class="payroll-header">
+          <div>
+            <div class="payroll-name">${emp.name}</div>
+            <div class="payroll-position">${emp.position}</div>
+          </div>
+        </div>
+        <button class="payroll-button" onclick="openSalaryModal('${emp.id}')">💰 Isplati za ${new Date(date).toLocaleDateString('sr-RS')}</button>
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== INVENTORY HANDLERS =====
+function openProductModal() {
+  document.getElementById('product-modal-title').textContent = 'Dodaj proizvod';
+  document.getElementById('prod-name').value = '';
+  document.getElementById('prod-quantity').value = '0';
+  document.getElementById('prod-unit-cost').value = '';
+  document.getElementById('prod-sale-price').value = '';
+  document.getElementById('prod-min-stock').value = '0';
+  document.getElementById('product-modal').style.display = 'flex';
+  UI.clearErrors();
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').style.display = 'none';
+}
+
+function saveProduct() {
+  const name = document.getElementById('prod-name').value.trim();
+  const quantity = document.getElementById('prod-quantity').value;
+  const unitCost = document.getElementById('prod-unit-cost').value;
+  const salePrice = document.getElementById('prod-sale-price').value;
+  const minStock = document.getElementById('prod-min-stock').value;
+
+  UI.clearErrors();
+  if (!name) { UI.showFieldError('prod-name', 'Naziv je obavezan'); return; }
+  if (!unitCost) { UI.showFieldError('prod-unit-cost', 'Cena je obavezna'); return; }
+  if (!salePrice) { UI.showFieldError('prod-sale-price', 'Prodajna cena je obavezna'); return; }
+
+  const result = Inventory.add(name, quantity, unitCost, salePrice, minStock);
+  if (result.success) {
+    UI.notify('Proizvod dodan ✓', 'success');
+    closeProductModal();
+    renderProductsList();
+  }
+}
+
+function deleteProduct(id) {
+  if (!UI.confirm('Obriši proizvod?')) return;
+  Inventory.remove(id);
+  UI.notify('Proizvod obrisan', 'success');
+  renderProductsList();
+}
+
+function openStockInModal(productId) {
+  const product = Inventory.getById(productId);
+  if (!product) return;
+  document.getElementById('stock-in-product').textContent = product.name;
+  document.getElementById('stock-in-date').valueAsDate = new Date();
+  document.getElementById('stock-in-qty').value = '';
+  document.getElementById('stock-in-modal').dataset.productId = productId;
+  document.getElementById('stock-in-modal').style.display = 'flex';
+  UI.clearErrors();
+}
+
+function closeStockInModal() {
+  document.getElementById('stock-in-modal').style.display = 'none';
+}
+
+function saveStockIn() {
+  const productId = document.getElementById('stock-in-modal').dataset.productId;
+  const date = document.getElementById('stock-in-date').value;
+  const qty = parseInt(document.getElementById('stock-in-qty').value);
+
+  UI.clearErrors();
+  if (!qty || qty <= 0) { UI.showFieldError('stock-in-qty', 'Količina je obavezna'); return; }
+
+  const movement = StockMovements.add(productId, 'in', qty, date);
+  if (movement.success) {
+    const product = Inventory.getById(productId);
+    Inventory.updateQuantity(productId, product.quantity + qty);
+    UI.notify('Roba primljena ✓', 'success');
+    closeStockInModal();
+    renderProductsList();
+    renderStockInList();
+  }
+}
+
+function openStockOutModal(productId) {
+  const product = Inventory.getById(productId);
+  if (!product) return;
+  document.getElementById('stock-out-product').textContent = product.name;
+  document.getElementById('stock-out-date').valueAsDate = new Date();
+  document.getElementById('stock-out-qty').value = '';
+  document.getElementById('stock-out-modal').dataset.productId = productId;
+  document.getElementById('stock-out-modal').style.display = 'flex';
+  UI.clearErrors();
+}
+
+function closeStockOutModal() {
+  document.getElementById('stock-out-modal').style.display = 'none';
+}
+
+function saveStockOut() {
+  const productId = document.getElementById('stock-out-modal').dataset.productId;
+  const date = document.getElementById('stock-out-date').value;
+  const qty = parseInt(document.getElementById('stock-out-qty').value);
+  const product = Inventory.getById(productId);
+
+  UI.clearErrors();
+  if (!qty || qty <= 0) { UI.showFieldError('stock-out-qty', 'Količina je obavezna'); return; }
+  if (qty > product.quantity) { UI.notify('Nema dovoljno zalihe!', 'error'); return; }
+
+  const movement = StockMovements.add(productId, 'out', qty, date);
+  if (movement.success) {
+    Inventory.updateQuantity(productId, product.quantity - qty);
+    UI.notify('Prodaja evidentovana ✓', 'success');
+    closeStockOutModal();
+    renderProductsList();
+    renderStockOutList();
+  }
+}
+
+function openAdjustmentModal(productId) {
+  const product = Inventory.getById(productId);
+  if (!product) return;
+  document.getElementById('adjustment-product').textContent = product.name;
+  document.getElementById('adjustment-date').valueAsDate = new Date();
+  document.getElementById('adjustment-qty').value = product.quantity;
+  document.getElementById('adjustment-modal').dataset.productId = productId;
+  document.getElementById('adjustment-modal').style.display = 'flex';
+  UI.clearErrors();
+}
+
+function closeAdjustmentModal() {
+  document.getElementById('adjustment-modal').style.display = 'none';
+}
+
+function saveAdjustment() {
+  const productId = document.getElementById('adjustment-modal').dataset.productId;
+  const date = document.getElementById('adjustment-date').value;
+  const newQty = parseInt(document.getElementById('adjustment-qty').value);
+  const product = Inventory.getById(productId);
+
+  UI.clearErrors();
+  if (newQty < 0) { UI.showFieldError('adjustment-qty', 'Količina ne sme biti negativna'); return; }
+
+  const diff = newQty - product.quantity;
+  const type = diff > 0 ? 'in' : (diff < 0 ? 'out' : 'adjust');
+  
+  if (diff !== 0) {
+    StockMovements.add(productId, type, Math.abs(diff), date);
+  }
+  Inventory.updateQuantity(productId, newQty);
+  UI.notify('Zaliha korigovana ✓', 'success');
+  closeAdjustmentModal();
+  renderProductsList();
+  renderAdjustmentList();
+}
+
+function deleteMovement(movementId) {
+  if (!UI.confirm('Obriši kretanje?')) return;
+  StockMovements.remove(movementId);
+  UI.notify('Kretanje obrisano', 'success');
+  renderStockInList();
+  renderStockOutList();
+  renderProductsList();
+}
+
+function clearAllStockIn() {
+  if (!UI.confirm('Obriši SVA primanja robe?')) return;
+  const movements = StockMovements.getAll().filter(m => m.type === 'in');
+  movements.forEach(m => StockMovements.remove(m.id));
+  UI.notify(`Obrisano ${movements.length} primanja`, 'success');
+  renderStockInList();
+  renderProductsList();
+}
+
+function clearAllStockOut() {
+  if (!UI.confirm('Obriši SVE prodaje?')) return;
+  const movements = StockMovements.getAll().filter(m => m.type === 'out');
+  movements.forEach(m => StockMovements.remove(m.id));
+  UI.notify(`Obrisano ${movements.length} prodaja`, 'success');
+  renderStockOutList();
+  renderProductsList();
+}
+
+function renderProductsList() {
+  const container = document.getElementById('products-list');
+  const products = Inventory.getAll();
+
+  if (products.length === 0) {
+    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center">Nema proizvoda</div>';
+    return;
+  }
+
+  container.innerHTML = products.map(p => {
+    const isLow = p.quantity < p.minStock;
+    const profit = p.salePrice - p.unitCost;
+    const margin = ((profit / p.salePrice) * 100).toFixed(0);
+    return `
+      <div class="product-card ${isLow ? 'low-stock' : ''}">
+        <div class="product-name">${p.name}</div>
+        <div class="product-stock ${isLow ? 'low' : ''}">Zaliha: ${p.quantity} kom ${isLow ? '(⚠ Nisko)' : ''}</div>
+        <div class="product-details">
+          <span><strong>Cena:</strong> ${UI.fmt(p.unitCost)}</span>
+          <span><strong>Prodajna:</strong> ${UI.fmt(p.salePrice)}</span>
+          <span><strong>Profit:</strong> ${UI.fmt(profit)} (${margin}%)</span>
+          <span><strong>Min:</strong> ${p.minStock} kom</span>
+        </div>
+        <div class="product-actions">
+          <button class="btn btn-green btn-sm" onclick="openStockInModal('${p.id}')">Prijem</button>
+          <button class="btn btn-blue btn-sm" onclick="openStockOutModal('${p.id}')">Prodaja</button>
+          <button class="btn btn-blue btn-sm" onclick="openAdjustmentModal('${p.id}')">Korekcija</button>
+          <button class="btn btn-red btn-sm" onclick="deleteProduct('${p.id}')">Obriši</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderStockInList() {
+  const container = document.getElementById('stock-in-list');
+  const products = Inventory.getAll();
+  
+  let html = '';
+  products.forEach(product => {
+    const movements = StockMovements.getByProduct(product.id).filter(m => m.type === 'in').slice(0, 3);
+    if (movements.length) {
+      html += `<div style="margin-bottom:16px"><strong>${product.name}</strong>`;
+      movements.forEach(m => {
+        html += `<div style="margin-top:4px;padding:6px;background:#1a1a20;border-radius:4px;font-size:11px;display:flex;justify-content:space-between">
+          <span>${new Date(m.date).toLocaleDateString('sr-RS')} - +${m.quantity} kom</span>
+          <button class="movement-btn" onclick="deleteMovement('${m.id}')">X</button>
+        </div>`;
+      });
+      html += '</div>';
+    }
+  });
+  container.innerHTML = html || '<div style="color:#888;padding:20px;text-align:center">Nema kretanja</div>';
+}
+
+function renderStockOutList() {
+  const container = document.getElementById('stock-out-list');
+  const products = Inventory.getAll();
+  
+  let html = '';
+  products.forEach(product => {
+    const movements = StockMovements.getByProduct(product.id).filter(m => m.type === 'out').slice(0, 3);
+    if (movements.length) {
+      html += `<div style="margin-bottom:16px"><strong>${product.name}</strong>`;
+      movements.forEach(m => {
+        html += `<div style="margin-top:4px;padding:6px;background:#1a1a20;border-radius:4px;font-size:11px;display:flex;justify-content:space-between">
+          <span>${new Date(m.date).toLocaleDateString('sr-RS')} - -${m.quantity} kom</span>
+          <button class="movement-btn" onclick="deleteMovement('${m.id}')">X</button>
+        </div>`;
+      });
+      html += '</div>';
+    }
+  });
+  container.innerHTML = html || '<div style="color:#888;padding:20px;text-align:center">Nema kretanja</div>';
+}
+
+function renderAdjustmentList() {
+  const container = document.getElementById('adjustment-list');
+  const products = Inventory.getAll();
+  
+  let html = '';
+  products.forEach(product => {
+    const movements = StockMovements.getByProduct(product.id).filter(m => m.type === 'adjust').slice(0, 3);
+    if (movements.length) {
+      html += `<div style="margin-bottom:16px"><strong>${product.name}</strong>`;
+      movements.forEach(m => {
+        html += `<div style="margin-top:4px;padding:6px;background:#1a1a20;border-radius:4px;font-size:11px;display:flex;justify-content:space-between">
+          <span>${new Date(m.date).toLocaleDateString('sr-RS')} - ${m.quantity} kom</span>
+          <button class="movement-btn" onclick="deleteMovement('${m.id}')">X</button>
+        </div>`;
+      });
+      html += '</div>';
+    }
+  });
+  container.innerHTML = html || '<div style="color:#888;padding:20px;text-align:center">Nema korekcija</div>';
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
   // Set today as default date
@@ -1297,9 +2039,24 @@ document.addEventListener('DOMContentLoaded', () => {
     dateInput.valueAsDate = new Date();
   }
 
+  // Set payroll date
+  const payDatum = document.getElementById('pay-datum');
+  if (payDatum) {
+    payDatum.valueAsDate = new Date();
+  }
+
   // Initialize categories and render
   UI.updateCategorySelect('prihod', Categories.getAll());
   Render.renderAll();
+
+  // Initialize employees
+  renderEmployeesList();
+  renderPayrollList();
+
+  // Initialize inventory
+  renderProductsList();
+  renderStockInList();
+  renderStockOutList();
 
   // Set initial type
   setType('prihod');

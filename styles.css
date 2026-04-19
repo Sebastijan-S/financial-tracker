@@ -707,3 +707,210 @@ canvas {
     padding: 0 2px;
   }
 }
+
+/* ===== EMPLOYEE CARD ===== */
+.employee-card {
+  background: #1a1a20;
+  padding: 14px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border: 1px solid #333;
+  transition: all 0.2s;
+}
+
+.employee-card:hover {
+  background: #232328;
+  border-color: #444;
+}
+
+.employee-info {
+  flex: 1;
+}
+
+.employee-name {
+  font-weight: 600;
+  color: #e8e8f0;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.employee-detail {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.employee-detail strong {
+  color: #bbb;
+}
+
+.employee-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.employee-actions .btn {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+/* ===== PAYROLL ITEM ===== */
+.payroll-item {
+  background: #1a1a20;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+}
+
+.payroll-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.payroll-name {
+  font-weight: 600;
+  color: #e8e8f0;
+}
+
+.payroll-salary {
+  font-size: 14px;
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.payroll-position {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+}
+
+.payroll-button {
+  width: 100%;
+  padding: 8px;
+  background: #0a5f3f;
+  border: none;
+  color: #4ade80;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.payroll-button:hover {
+  background: #0d7c52;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.2);
+}
+
+/* ===== SALARY HISTORY ===== */
+.salary-history {
+  background: #1a1a20;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  margin-top: 8px;
+}
+
+.salary-record {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #2a2a30;
+  font-size: 12px;
+}
+
+.salary-record:last-child {
+  border-bottom: none;
+}
+
+.salary-date {
+  color: #999;
+}
+
+.salary-values {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+}
+
+.salary-bruto {
+  color: #60a5fa;
+}
+
+.salary-neto {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.salary-delete-btn {
+  background: none;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.salary-delete-btn:hover {
+  color: #ff6b6b;
+}
+
+/* ===== INVENTORY ===== */
+.product-card {
+  background: #1a1a20;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+.product-card.low-stock {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.product-name {
+  font-weight: 600;
+  color: #e8e8f0;
+  margin-bottom: 6px;
+}
+
+.product-stock {
+  font-size: 12px;
+  color: #60a5fa;
+}
+
+.product-stock.low {
+  color: #f87171;
+}
+
+.product-details {
+  font-size: 11px;
+  color: #999;
+  margin: 8px 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.product-details span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.product-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.product-actions .btn {
+  flex: 1;
+  padding: 6px;
+  font-size: 11px;
+}
