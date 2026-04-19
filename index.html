@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skviz Tracking - Jednostavna aplikacija za praćenje finansija kafića">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Skviz Tracking</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- ===== HEADER ===== -->
+    <div class="header">
+      <h1>Skviz Tracking</h1>
+      <div class="tabs">
+        <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
+        <button class="tab" onclick="showTab('dodaj')">Dodaj</button>
+        <button class="tab" onclick="showTab('istorija')">Istorija</button>
+        <button class="tab" onclick="showTab('izvestaj')">Izveštaj</button>
+        <button class="tab" onclick="showTab('zaposleni')">Zaposleni</button>
+        <button class="tab" onclick="showTab('magacin')">Magacin</button>
+        <button class="tab" onclick="showTab('prihodna')">Prihodna</button>
+      </div>
+    </div>
+
+    <!-- ===== DASHBOARD TAB ===== -->
+    <div id="tab-dashboard">
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Prihodi</div>
+          <div class="metric-value green" id="m-prihodi">0 RSD</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Rashodi</div>
+          <div class="metric-value red" id="m-rashodi">0 RSD</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Stanje</div>
+          <div class="metric-value blue" id="m-stanje">0 RSD</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="section">
+          <div class="section-title">Prihodi vs Rashodi (6 mes.)</div>
+          <div style="position:relative;height:200px">
+            <canvas id="chartBar" role="img" aria-label="Bar chart prihodi vs rashodi"></canvas>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Rashodi po kategoriji</div>
+          <div style="position:relative;height:200px">
+            <canvas id="chartPie" role="img" aria-label="Pie chart kategorije rashoda"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Poslednje transakcije</div>
+        <div id="recent-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== DODAJ TAB ===== -->
+    <div id="tab-dodaj" style="display:none">
+      <div class="subtabs">
+        <button class="subtab active" onclick="showSubtab('nova')">Nova transakcija</button>
+        <button class="subtab" onclick="showSubtab('kategorije')">Upravljaj kategorijama</button>
+      </div>
+
+      <!-- Nova transakcija subtab -->
+      <div id="subtab-nova">
+        <div class="section">
+          <div class="type-btns">
+            <button class="btn btn-green" id="btn-prihod" onclick="setType('prihod')">+ Prihod</button>
+            <button class="btn btn-red" id="btn-rashod" onclick="setType('rashod')" style="opacity:.4">- Rashod</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <input type="number" id="f-iznos" placeholder="Iznos (RSD)" min="0" step="0.01">
+              <div class="form-error" id="err-iznos"></div>
+            </div>
+            <div class="form-group">
+              <input type="date" id="f-datum">
+              <div class="form-error" id="err-datum"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <input type="text" id="f-opis" placeholder="Opis (opciono)">
+              <div class="form-error" id="err-opis"></div>
+            </div>
+            <div class="form-group">
+              <select id="f-kat"></select>
+              <div class="form-error" id="err-kat"></div>
+            </div>
+          </div>
+          <button class="btn btn-green btn-full" onclick="dodajTx()">Sačuvaj</button>
+        </div>
+      </div>
+
+      <!-- Upravljaj kategorijama subtab -->
+      <div id="subtab-kategorije" style="display:none">
+        <div class="section">
+          <div class="section-title">Prihodi — kategorije</div>
+          <div class="kat-list" id="kat-list-prihod"></div>
+          <div class="add-kat-row">
+            <input type="text" id="new-kat-prihod" placeholder="Naziv nove kategorije" onkeydown="if(event.key==='Enter') dodajKat('prihod')">
+            <button class="btn btn-green btn-sm" onclick="dodajKat('prihod')">+ Dodaj</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Rashodi — kategorije</div>
+          <div class="kat-list" id="kat-list-rashod"></div>
+          <div class="add-kat-row">
+            <input type="text" id="new-kat-rashod" placeholder="Naziv nove kategorije" onkeydown="if(event.key==='Enter') dodajKat('rashod')">
+            <button class="btn btn-red btn-sm" onclick="dodajKat('rashod')">+ Dodaj</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ISTORIJA TAB ===== -->
+    <div id="tab-istorija" style="display:none">
+      <div class="section">
+        <div class="section-title">Sve transakcije</div>
+        <div class="filter-row">
+          <select id="filter-tip" onchange="renderIstorija()">
+            <option value="">Sve vrste</option>
+            <option value="prihod">Prihodi</option>
+            <option value="rashod">Rashodi</option>
+          </select>
+          <select id="filter-kat" onchange="renderIstorija()">
+            <option value="">Sve kategorije</option>
+          </select>
+          <input type="text" id="filter-search" placeholder="Pretraži..." onkeyup="renderIstorija()" style="flex:1;min-width:150px">
+        </div>
+        <div class="tx-list-wrap" id="istorija-list"></div>
+      </div>
+    </div>
+
+    <!-- ===== IZVESTAJ TAB ===== -->
+    <div id="tab-izvestaj" style="display:none">
+      <div class="section">
+        <div class="section-title">Mesečni pregled</div>
+        <table class="monthly-table">
+          <thead>
+            <tr>
+              <th>Mesec</th>
+              <th class="r">Prihodi</th>
+              <th class="r">Rashodi</th>
+              <th class="r">Razlika</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-body"></tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Rashodi po kategoriji</div>
+        <div style="position:relative;height:260px">
+          <canvas id="chartKat" role="img" aria-label="Bar chart kategorije rashoda"></canvas>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Podaci</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-blue btn-sm" onclick="exportDataJSON()">💾 JSON Backup</button>
+          <button class="btn btn-blue btn-sm" onclick="exportDataCSV()">📊 CSV Export</button>
+          <button class="btn btn-blue btn-sm" onclick="importDataJSON()">📂 Učitaj JSON</button>
+          <button class="btn btn-blue btn-sm" onclick="importDataCSV()">📂 Učitaj CSV</button>
+          <button class="btn btn-red btn-sm" onclick="clearAllData()">🗑️ Obriši sve</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ZAPOSLENI TAB ===== -->
+    <div id="tab-zaposleni" style="display:none">
+      <div class="subtabs">
+        <button class="subtab active" onclick="showSubtab('lista-zaposlenih')">Lista zaposlenih</button>
+        <button class="subtab" onclick="showSubtab('nova-plata')">Isplati platu</button>
+      </div>
+
+      <!-- Lista zaposlenih subtab -->
+      <div id="subtab-lista-zaposlenih">
+        <div class="section">
+          <div class="section-title">Zaposleni</div>
+          <button class="btn btn-green btn-sm" onclick="openAddEmployeeModal()" style="margin-bottom:16px">➕ Dodaj zaposlenog</button>
+          <div id="employees-list" style="display:grid;gap:12px"></div>
+        </div>
+      </div>
+
+      <!-- Isplati platu subtab -->
+      <div id="subtab-nova-plata" style="display:none">
+        <div class="section">
+          <div class="section-title">Isplata plate</div>
+          <div class="form-row">
+            <div class="form-group">
+              <input type="date" id="pay-datum" value="" onchange="renderPayrollList()">
+              <div class="form-error" id="err-pay-datum"></div>
+            </div>
+          </div>
+          <div id="payroll-list" style="display:grid;gap:12px;margin-top:16px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MAGACIN TAB ===== -->
+    <div id="tab-magacin" style="display:none">
+      <div class="subtabs">
+        <button class="subtab active" onclick="showSubtab('lista-proizvoda')">Lista proizvoda</button>
+        <button class="subtab" onclick="showSubtab('prijem-robe')">Prijem robe</button>
+        <button class="subtab" onclick="showSubtab('prodaja')">Prodaja</button>
+      </div>
+      <div id="subtab-lista-proizvoda">
+        <div class="section">
+          <div class="section-title">Proizvodi</div>
+          <button class="btn btn-green btn-sm" onclick="openProductModal()" style="margin-bottom:16px">Dodaj proizvod</button>
+          <div id="products-list" style="display:grid;gap:12px"></div>
+        </div>
+      </div>
+      <div id="subtab-prijem-robe" style="display:none">
+        <div class="section">
+          <div class="section-title">Prijem robe</div>
+          <button class="btn btn-red btn-sm" onclick="clearAllStockIn()" style="margin-bottom:16px">Obriši sve</button>
+          <div id="stock-in-list" style="display:grid;gap:12px"></div>
+        </div>
+      </div>
+      <div id="subtab-prodaja" style="display:none">
+        <div class="section">
+          <div class="section-title">Prodaja</div>
+          <button class="btn btn-red btn-sm" onclick="clearAllStockOut()" style="margin-bottom:16px">Obriši sve</button>
+          <div id="stock-out-list" style="display:grid;gap:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PRIHODNA TAB ===== -->
+    <div id="tab-prihodna" style="display:none">
+      <div class="subtabs">
+        <button class="subtab active" onclick="showSubtab('nepaid-receipts')">Neplaćeni</button>
+        <button class="subtab" onclick="showSubtab('paid-receipts')">Plaćeni</button>
+      </div>
+
+      <!-- Neplaćeni (Unpaid) subtab -->
+      <div id="subtab-nepaid-receipts">
+        <div class="section">
+          <button class="btn btn-green btn-sm" onclick="openReceiptModal('unpaid')" style="margin-bottom:16px">➕ Dodaj Prihodnu</button>
+          <div id="unpaid-receipts-list" style="display:grid;gap:12px"></div>
+        </div>
+      </div>
+
+      <!-- Plaćeni (Paid) subtab -->
+      <div id="subtab-paid-receipts" style="display:none">
+        <div class="section">
+          <div id="paid-receipts-list" style="display:grid;gap:12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RECEIPT MODAL ===== -->
+  <div id="receipt-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title" id="receipt-modal-title">Dodaj Pribodnu</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="text" id="receipt-vendor" placeholder="Naziv dobavljača/kupca">
+          <div class="form-error" id="err-receipt-vendor"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="receipt-amount" placeholder="Iznos (RSD)" min="0" step="0.01">
+          <div class="form-error" id="err-receipt-amount"></div>
+        </div>
+        <div class="form-group" style="flex:1">
+          <select id="receipt-category">
+            <option value="">Izaberi podkategoriju</option>
+          </select>
+          <div class="form-error" id="err-receipt-category"></div>
+        </div>
+        <div class="form-group" style="flex:0 0 auto">
+          <button class="btn btn-blue btn-sm" onclick="openReceiptCategoryManager()" style="padding:8px 12px;font-size:12px;height:35px;white-space:nowrap">⚙️ Uredi</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Datum primitka</label>
+          <input type="date" id="receipt-date-received">
+          <div class="form-error" id="err-receipt-date-received"></div>
+        </div>
+        <div class="form-group">
+          <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Rok za plaćanje</label>
+          <input type="date" id="receipt-due-date">
+          <div class="form-error" id="err-receipt-due-date"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <textarea id="receipt-notes" placeholder="Napomene (opciono)" style="min-height:60px;padding:8px;background:#0a0a0f;color:#e8e8f0;border:1px solid #333;border-radius:6px;font-family:inherit;resize:vertical"></textarea>
+          <div class="form-error" id="err-receipt-notes"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeReceiptModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveReceipt()">Sačuvaj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MARK PAID MODAL ===== -->
+  <div id="mark-paid-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Označi kao plaćeno</h2>
+      <div class="section" style="background:#1a1a20;padding:12px;border-radius:6px;margin:12px 0">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="color:#888">Dobavljač:</span>
+          <span id="mark-paid-vendor"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="color:#888">Iznos:</span>
+          <span id="mark-paid-amount"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#888">Kategorija:</span>
+          <span id="mark-paid-category"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Datum plaćanja</label>
+          <input type="date" id="mark-paid-date">
+          <div class="form-error" id="err-mark-paid-date"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeMarkPaidModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveMarkPaid()">Označi kao plaćeno</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RECEIPT CATEGORY MANAGER MODAL ===== -->
+  <div id="receipt-category-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Upravljaj kategorijama prihodnih</h2>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <input type="text" id="new-receipt-category" placeholder="Nova kategorija" onkeydown="if(event.key==='Enter') addReceiptCategory()">
+          <div class="form-error" id="err-new-receipt-category"></div>
+        </div>
+        <div class="form-group" style="flex:0 0 auto">
+          <button class="btn btn-green btn-sm" onclick="addReceiptCategory()" style="padding:8px 12px;font-size:12px;height:35px;white-space:nowrap">+ Dodaj</button>
+        </div>
+      </div>
+      <div id="receipt-category-list" style="margin-top:16px;max-height:300px;overflow-y:auto"></div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeReceiptCategoryModal()">Zatvori</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PRODUCT MODAL ===== -->
+  <div id="product-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title" id="product-modal-title">Dodaj proizvod</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="text" id="prod-name" placeholder="Naziv">
+          <div class="form-error" id="err-prod-name"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="prod-quantity" placeholder="Količina" min="0" step="1">
+          <div class="form-error" id="err-prod-quantity"></div>
+        </div>
+        <div class="form-group">
+          <input type="number" id="prod-unit-cost" placeholder="Cena (RSD)" min="0" step="0.01">
+          <div class="form-error" id="err-prod-unit-cost"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="prod-sale-price" placeholder="Prodajna cena (RSD)" min="0" step="0.01">
+          <div class="form-error" id="err-prod-sale-price"></div>
+        </div>
+        <div class="form-group">
+          <input type="number" id="prod-min-stock" placeholder="Min. zaliha" min="0" step="1">
+          <div class="form-error" id="err-prod-min-stock"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeProductModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveProduct()">Sačuvaj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STOCK IN MODAL ===== -->
+  <div id="stock-in-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Prijem - <span id="stock-in-product"></span></h2>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="date" id="stock-in-date">
+          <div class="form-error" id="err-stock-in-date"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="stock-in-qty" placeholder="Količina" min="1" step="1">
+          <div class="form-error" id="err-stock-in-qty"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeStockInModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveStockIn()">Dodaj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STOCK OUT MODAL ===== -->
+  <div id="stock-out-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Prodaja - <span id="stock-out-product"></span></h2>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="date" id="stock-out-date">
+          <div class="form-error" id="err-stock-out-date"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="stock-out-qty" placeholder="Količina" min="1" step="1">
+          <div class="form-error" id="err-stock-out-qty"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeStockOutModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveStockOut()">Prodaj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ADJUSTMENT MODAL ===== -->
+  <div id="adjustment-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Korekcija - <span id="adjustment-product"></span></h2>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="date" id="adjustment-date">
+          <div class="form-error" id="err-adjustment-date"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="adjustment-qty" placeholder="Nova količina" min="0" step="1">
+          <div class="form-error" id="err-adjustment-qty"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeAdjustmentModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveAdjustment()">Primeni</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ADD EMPLOYEE MODAL ===== -->
+  <div id="employee-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title" id="employee-modal-title">Dodaj zaposlenog</h2>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <input type="text" id="emp-name" placeholder="Ime i prezime">
+          <div class="form-error" id="err-emp-name"></div>
+        </div>
+        <div class="form-group">
+          <input type="text" id="emp-position" placeholder="Pozicija (npr. Konobar)">
+          <div class="form-error" id="err-emp-position"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <input type="email" id="emp-email" placeholder="Email (opciono)">
+          <div class="form-error" id="err-emp-email"></div>
+        </div>
+        <div class="form-group">
+          <input type="tel" id="emp-phone" placeholder="Telefon (opciono)">
+          <div class="form-error" id="err-emp-phone"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Datum zapošljavanja</label>
+          <input type="date" id="emp-hire-date">
+          <div class="form-error" id="err-emp-hire-date"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn" onclick="closeEmployeeModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveEmployee()">Sačuvaj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SALARY PAYMENT MODAL ===== -->
+  <div id="salary-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Isplati platu - <span id="salary-emp-name"></span></h2>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Datum isplate</label>
+          <input type="date" id="salary-datum">
+          <div class="form-error" id="err-salary-datum"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="salary-amount" placeholder="Bruto salary (RSD)" min="0" step="0.01" onchange="calculateNet()" oninput="calculateNet()">
+          <div class="form-error" id="err-salary-amount"></div>
+        </div>
+      </div>
+
+      <div class="section" style="background:#1a1a20;padding:12px;border-radius:6px;margin:12px 0;font-size:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span>Bruto:</span>
+          <span id="salary-bruto">0 RSD</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;color:#888">
+          <span>Porez:</span>
+          <input type="number" id="salary-tax" placeholder="0" min="0" step="0.01" style="width:100px;padding:4px;background:#0a0a0f;color:#e8e8f0;border:1px solid #333;border-radius:3px" onchange="calculateNet()" oninput="calculateNet()">
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;color:#888">
+          <span>Osiguranje:</span>
+          <input type="number" id="salary-insurance" placeholder="0" min="0" step="0.01" style="width:100px;padding:4px;background:#0a0a0f;color:#e8e8f0;border:1px solid #333;border-radius:3px" onchange="calculateNet()" oninput="calculateNet()">
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;color:#888">
+          <span>Drugi odbici:</span>
+          <input type="number" id="salary-other" placeholder="0" min="0" step="0.01" style="width:100px;padding:4px;background:#0a0a0f;color:#e8e8f0;border:1px solid #333;border-radius:3px" onchange="calculateNet()" oninput="calculateNet()">
+        </div>
+        <div style="border-top:1px solid #333;padding-top:8px;display:flex;justify-content:space-between;color:#4ade80;font-weight:bold">
+          <span>Neto:</span>
+          <span id="salary-neto">0 RSD</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn" onclick="closeSalaryModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveSalaryPayment()">Isplati</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EDIT TRANSACTION MODAL ===== -->
+  <div id="edit-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2 class="modal-title">Uredi Transakciju</h2>
+      <div class="form-group">
+        <label style="display:block;color:#888;font-size:11px;margin-bottom:6px">Vrsta</label>
+        <div id="edit-type-display" style="font-size:13px;color:#d0d0e0;padding:8px 0"></div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <input type="number" id="edit-iznos" placeholder="Iznos (RSD)" min="0" step="0.01">
+          <div class="form-error" id="err-edit-iznos"></div>
+        </div>
+        <div class="form-group">
+          <input type="date" id="edit-datum">
+          <div class="form-error" id="err-edit-datum"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <input type="text" id="edit-opis" placeholder="Opis (opciono)">
+          <div class="form-error" id="err-edit-opis"></div>
+        </div>
+        <div class="form-group">
+          <select id="edit-kat"></select>
+          <div class="form-error" id="err-edit-kat"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn" onclick="closeEditModal()">Otkaži</button>
+        <button class="btn btn-green" onclick="saveEditTransaction()">Sačuvaj Promene</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
