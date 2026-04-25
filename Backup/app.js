@@ -1,75 +1,39 @@
 /**
  * Kafić Finansije - Financial Management App
  * Module-based architecture for maintainability and scalability
- * Updated: Firebase Realtime Database for live shared data
  */
 
-// ===== STORAGE MODULE (Firebase-based) =====
+// ===== STORAGE MODULE =====
 const Storage = (() => {
+  const TX_KEY = 'kafic_tx';
+  const KATS_KEY = 'kafic_kats';
   const SCHEMA_VERSION = 1;
-  let db = null;
-  let dataCache = {
-    transactions: [],
-    categories: null,
-    employees: [],
-    salaryRecords: [],
-    inventory: [],
-    stockMovements: [],
-    receipts: [],
-    receiptCategories: []
-  };
 
   const DEFAULT_KATS = {
     prihod: ['Prihod od prodaje', 'Ostali prihodi'],
     rashod: ['Plate', 'Kirija', 'Atlantic', 'Ramada', 'Knjigovođa', 'Komunalije', 'Sokoj', 'Smart PH', 'Payspot', 'Konty', 'Ostalo']
   };
 
-  // Initialize Firebase connection
-  const initFirebase = () => {
-    if (window.firebaseDB) {
-      db = window.firebaseDB;
-      console.log('✓ Firebase Realtime Database connected');
-      return true;
-    } else {
-      console.error('Firebase not initialized. Check your config in index.html');
-      return false;
-    }
-  };
-
-  // Wait for Firebase to be ready
-  if (!db) {
-    setTimeout(() => initFirebase(), 500);
-  }
-
   /**
-   * Load transactions from Firebase
-   * @returns {Promise<Array>}
+   * Load transactions from localStorage
+   * @returns {Array} List of transaction objects
    */
-  const loadTransactions = async () => {
+  const loadTransactions = () => {
     try {
-      if (!db) initFirebase();
-      const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      const snapshot = await get(ref(db, 'transactions'));
-      const data = snapshot.val() || [];
-      dataCache.transactions = Array.isArray(data) ? data : Object.values(data);
-      return dataCache.transactions;
+      return JSON.parse(localStorage.getItem(TX_KEY) || '[]');
     } catch (e) {
       console.error('Error loading transactions:', e);
-      return dataCache.transactions;
+      return [];
     }
   };
 
   /**
-   * Save transactions to Firebase
-   * @param {Array} data
-   * @returns {Promise<boolean>}
+   * Save transactions to localStorage
+   * @param {Array} data - Transactions to save
    */
-  const saveTransactions = async (data) => {
+  const saveTransactions = (data) => {
     try {
-      if (!db) initFirebase();
-      const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      await set(ref(db, 'transactions'), data);
-      dataCache.transactions = data;
+      localStorage.setItem(TX_KEY, JSON.stringify(data));
       return true;
     } catch (e) {
       console.error('Error saving transactions:', e);
@@ -78,17 +42,12 @@ const Storage = (() => {
   };
 
   /**
-   * Load categories from Firebase
-   * @returns {Promise<Object>}
+   * Load categories from localStorage
+   * @returns {Object} Categories object { prihod: [], rashod: [] }
    */
-  const loadCategories = async () => {
+  const loadCategories = () => {
     try {
-      if (!db) initFirebase();
-      const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      const snapshot = await get(ref(db, 'categories'));
-      const data = snapshot.val() || DEFAULT_KATS;
-      dataCache.categories = data;
-      return data;
+      return JSON.parse(localStorage.getItem(KATS_KEY) || JSON.stringify(DEFAULT_KATS));
     } catch (e) {
       console.error('Error loading categories:', e);
       return DEFAULT_KATS;
@@ -96,16 +55,12 @@ const Storage = (() => {
   };
 
   /**
-   * Save categories to Firebase
-   * @param {Object} data
-   * @returns {Promise<boolean>}
+   * Save categories to localStorage
+   * @param {Object} data - Categories to save
    */
-  const saveCategories = async (data) => {
+  const saveCategories = (data) => {
     try {
-      if (!db) initFirebase();
-      const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      await set(ref(db, 'categories'), data);
-      dataCache.categories = data;
+      localStorage.setItem(KATS_KEY, JSON.stringify(data));
       return true;
     } catch (e) {
       console.error('Error saving categories:', e);
@@ -114,79 +69,62 @@ const Storage = (() => {
   };
 
   /**
-   * Export all data to JSON (now async)
-   * @returns {Promise<string>}
+   * Export all data to JSON
+   * @returns {string} JSON string of all data
    */
-  const exportJSON = async () => {
-    try {
-      const txn = await loadTransactions();
-      const cats = await loadCategories();
-      const employees = await getAsync('employees');
-      const salaryRecords = await getAsync('salaryRecords');
-      const inventory = await getAsync('inventory');
-      const stockMovements = await getAsync('stockMovements');
-      const receipts = await getAsync('receipts');
-      const receiptCategories = await getAsync('receiptCategories');
-      
-      return JSON.stringify({ 
-        version: SCHEMA_VERSION, 
-        transactions: txn, 
-        categories: cats,
-        employees: employees,
-        salaryRecords: salaryRecords,
-        inventory: inventory,
-        stockMovements: stockMovements,
-        receipts: receipts,
-        receiptCategories: receiptCategories
-      }, null, 2);
-    } catch (e) {
-      console.error('Export error:', e);
-      return '{}';
-    }
+  const exportJSON = () => {
+    const txn = loadTransactions();
+    const cats = loadCategories();
+    const employees = get('employees');
+    const salaryRecords = get('salaryRecords');
+    const inventory = get('inventory');
+    const stockMovements = get('stockMovements');
+    const receipts = get('receipts');
+    const receiptCategories = get('receiptCategories');
+    
+    return JSON.stringify({ 
+      version: SCHEMA_VERSION, 
+      transactions: txn, 
+      categories: cats,
+      employees: employees,
+      salaryRecords: salaryRecords,
+      inventory: inventory,
+      stockMovements: stockMovements,
+      receipts: receipts,
+      receiptCategories: receiptCategories
+    }, null, 2);
   };
 
   /**
-   * Import all data from JSON (now async)
-   * @returns {Promise<Object>}
+   * Import all data from JSON
+   * @param {string} jsonData - JSON string to import
+   * @param {boolean} merge - If true, merge with existing; if false, replace
+   * @returns {Object} { success: boolean, message: string }
    */
-  const importJSON = async (jsonData, merge = false) => {
+  const importJSON = (jsonData, merge = false) => {
     try {
       const parsed = JSON.parse(jsonData);
       if (!parsed.transactions || !Array.isArray(parsed.transactions)) {
         return { success: false, message: 'Invalid JSON format: missing transactions array' };
       }
       
-      const existingTxn = await loadTransactions();
-      const txn = merge ? [...existingTxn, ...parsed.transactions] : parsed.transactions;
-      const cats = parsed.categories || await loadCategories();
-      const existingEmp = await getAsync('employees');
-      const employees = merge ? [...existingEmp, ...(parsed.employees || [])] : (parsed.employees || []);
-      const existingSalary = await getAsync('salaryRecords');
-      const salaryRecords = merge ? [...existingSalary, ...(parsed.salaryRecords || [])] : (parsed.salaryRecords || []);
-      const existingInv = await getAsync('inventory');
-      const inventory = merge ? [...existingInv, ...(parsed.inventory || [])] : (parsed.inventory || []);
-      const existingStockMov = await getAsync('stockMovements');
-      const stockMovements = merge ? [...existingStockMov, ...(parsed.stockMovements || [])] : (parsed.stockMovements || []);
-      const existingReceipts = await getAsync('receipts');
-      const receipts = merge ? [...existingReceipts, ...(parsed.receipts || [])] : (parsed.receipts || []);
-      const receiptCategories = parsed.receiptCategories || await getAsync('receiptCategories');
+      const txn = merge ? [...loadTransactions(), ...parsed.transactions] : parsed.transactions;
+      const cats = parsed.categories || loadCategories();
+      const employees = merge ? [...get('employees'), ...(parsed.employees || [])] : (parsed.employees || []);
+      const salaryRecords = merge ? [...get('salaryRecords'), ...(parsed.salaryRecords || [])] : (parsed.salaryRecords || []);
+      const inventory = merge ? [...get('inventory'), ...(parsed.inventory || [])] : (parsed.inventory || []);
+      const stockMovements = merge ? [...get('stockMovements'), ...(parsed.stockMovements || [])] : (parsed.stockMovements || []);
+      const receipts = merge ? [...get('receipts'), ...(parsed.receipts || [])] : (parsed.receipts || []);
+      const receiptCategories = parsed.receiptCategories || get('receiptCategories');
       
-      await saveTransactions(txn);
-      await saveCategories(cats);
-      await setAsync('employees', employees);
-      await setAsync('salaryRecords', salaryRecords);
-      await setAsync('inventory', inventory);
-      await setAsync('stockMovements', stockMovements);
-      await setAsync('receipts', receipts);
-      await setAsync('receiptCategories', receiptCategories);
-
-      // Keep in-memory cache in sync (UI reads from cache)
-      dataCache.employees = employees;
-      dataCache.salaryRecords = salaryRecords;
-      dataCache.inventory = inventory;
-      dataCache.stockMovements = stockMovements;
-      dataCache.receipts = receipts;
-      dataCache.receiptCategories = receiptCategories;
+      saveTransactions(txn);
+      saveCategories(cats);
+      set('employees', employees);
+      set('salaryRecords', salaryRecords);
+      set('inventory', inventory);
+      set('stockMovements', stockMovements);
+      set('receipts', receipts);
+      set('receiptCategories', receiptCategories);
       
       return { success: true, message: `Imported ${parsed.transactions.length} transactions and all related data` };
     } catch (e) {
@@ -195,37 +133,34 @@ const Storage = (() => {
   };
 
   /**
-   * Export transactions to CSV format (now async)
-   * @returns {Promise<string>}
+   * Export transactions to CSV format
+   * @returns {string} CSV string
    */
-  const exportCSV = async () => {
-    try {
-      const txn = await loadTransactions();
-      const headers = ['Datum', 'Vrsta', 'Kategorija', 'Opis', 'Iznos (RSD)'];
-      const rows = txn.map(t => [
-        t.datum,
-        t.tip === 'prihod' ? 'Prihod' : 'Rashod',
-        t.kat,
-        t.opis,
-        t.iznos
-      ]);
-      
-      const csv = [headers, ...rows]
-        .map(row => row.map(cell => `"${cell}"`).join(','))
-        .join('\n');
-      
-      return csv;
-    } catch (e) {
-      console.error('CSV export error:', e);
-      return '';
-    }
+  const exportCSV = () => {
+    const txn = loadTransactions();
+    const headers = ['Datum', 'Vrsta', 'Kategorija', 'Opis', 'Iznos (RSD)'];
+    const rows = txn.map(t => [
+      t.datum,
+      t.tip === 'prihod' ? 'Prihod' : 'Rashod',
+      t.kat,
+      t.opis,
+      t.iznos
+    ]);
+    
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+    
+    return csv;
   };
 
   /**
-   * Import from CSV format (now async)
-   * @returns {Promise<Object>}
+   * Import from CSV format
+   * @param {string} csvData - CSV string to import
+   * @param {boolean} merge - If true, merge with existing; if false, replace
+   * @returns {Object} { success: boolean, message: string }
    */
-  const importCSV = async (csvData, merge = false) => {
+  const importCSV = (csvData, merge = false) => {
     try {
       const lines = csvData.trim().split('\n');
       if (lines.length < 2) {
@@ -253,9 +188,8 @@ const Storage = (() => {
         return { success: false, message: 'No valid transactions found in CSV' };
       }
 
-      const existingTxn = await loadTransactions();
-      const txn = merge ? [...existingTxn, ...transactions] : transactions;
-      await saveTransactions(txn);
+      const txn = merge ? [...loadTransactions(), ...transactions] : transactions;
+      saveTransactions(txn);
       return { success: true, message: `Imported ${transactions.length} transactions` };
     } catch (e) {
       return { success: false, message: `CSV import error: ${e.message}` };
@@ -263,45 +197,30 @@ const Storage = (() => {
   };
 
   /**
-   * Clear all data with confirmation (now async)
-   * @returns {Promise<boolean>}
+   * Clear all data with confirmation
+   * @returns {boolean} - True if cleared
    */
-  const clearAll = async () => {
+  const clearAll = () => {
     if (confirm('⚠️ Obrisati SVE podatke? Ovo se ne može vratiti!')) {
-      try {
-        if (!db) initFirebase();
-        const { ref, remove } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-        await remove(ref(db));
-        dataCache = {
-          transactions: [],
-          categories: null,
-          employees: [],
-          salaryRecords: [],
-          inventory: [],
-          stockMovements: [],
-          receipts: [],
-          receiptCategories: []
-        };
-        return true;
-      } catch (e) {
-        console.error('Error clearing data:', e);
-        return false;
-      }
+      localStorage.removeItem(TX_KEY);
+      localStorage.removeItem(KATS_KEY);
+      localStorage.removeItem('employees');
+      localStorage.removeItem('salaryRecords');
+      localStorage.removeItem('inventory');
+      localStorage.removeItem('stockMovements');
+      localStorage.removeItem('receipts');
+      localStorage.removeItem('receiptCategories');
+      return true;
     }
     return false;
   };
 
   /**
-   * Generic get for any Firebase key (async, hits Firebase)
-   * @returns {Promise<any>}
+   * Generic get for any localStorage key
    */
-  const getAsync = async (key) => {
+  const get = (key) => {
     try {
-      if (!db) initFirebase();
-      const { ref, child, get: fbGet } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      const snapshot = await fbGet(child(ref(db), key));
-      const data = snapshot.val() || [];
-      return Array.isArray(data) ? data : Object.values(data);
+      return JSON.parse(localStorage.getItem(key) || '[]');
     } catch (e) {
       console.error(`Error loading ${key}:`, e);
       return [];
@@ -309,14 +228,11 @@ const Storage = (() => {
   };
 
   /**
-   * Generic set for any Firebase key (async, hits Firebase)
-   * @returns {Promise<boolean>}
+   * Generic set for any localStorage key
    */
-  const setAsync = async (key, data) => {
+  const set = (key, data) => {
     try {
-      if (!db) initFirebase();
-      const { ref, child, set: fbSet } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      await fbSet(child(ref(db), key), data);
+      localStorage.setItem(key, JSON.stringify(data));
       return true;
     } catch (e) {
       console.error(`Error saving ${key}:`, e);
@@ -324,30 +240,7 @@ const Storage = (() => {
     }
   };
 
-  /**
-   * Generic get (sync, from cache)
-   * UI modules expect sync arrays/objects, not Promises.
-   */
-  const get = (key) => {
-    if (Object.prototype.hasOwnProperty.call(dataCache, key)) {
-      return dataCache[key];
-    }
-    return [];
-  };
-
-  /**
-   * Generic set (sync, updates cache + saves to Firebase in background)
-   */
-  const set = (key, data) => {
-    dataCache[key] = data;
-    Promise.resolve()
-      .then(() => setAsync(key, data))
-      .catch((e) => console.error(`Error saving ${key}:`, e));
-    return true;
-  };
-
   return {
-    initFirebase,
     loadTransactions,
     saveTransactions,
     loadCategories,
@@ -359,66 +252,7 @@ const Storage = (() => {
     clearAll,
     get,
     set,
-    getAsync,
-    setAsync,
-    DEFAULT_KATS,
-    dataCache
-  };
-})();
-
-// ===== SYNC MANAGER MODULE (Real-time Firebase sync) =====
-const SyncManager = (() => {
-  let isInitialized = false;
-  let syncListeners = {};
-
-  /**
-   * Subscribe to Firebase realtime updates
-   */
-  const startSync = async () => {
-    try {
-      if (!window.firebaseDB) {
-        console.warn('Firebase not ready yet');
-        setTimeout(startSync, 1000);
-        return;
-      }
-
-      const { ref, onValue } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-      const db = window.firebaseDB;
-
-      // Listen to transactions
-      const txRef = ref(db, 'transactions');
-      onValue(txRef, (snapshot) => {
-        const data = snapshot.val() || [];
-        const txnArray = Array.isArray(data) ? data : Object.values(data);
-        if (Transactions && Transactions._updateData) {
-          Transactions._updateData(txnArray);
-        }
-      });
-
-      // Listen to categories
-      const catRef = ref(db, 'categories');
-      onValue(catRef, (snapshot) => {
-        const data = snapshot.val() || Storage.DEFAULT_KATS;
-        if (Categories && Categories._updateData) {
-          Categories._updateData(data);
-          UI.updateCategorySelect(Transactions.getType(), data);
-        }
-      });
-
-      isInitialized = true;
-      console.log('✓ Real-time data sync started');
-    } catch (e) {
-      console.error('Error starting sync:', e);
-      setTimeout(startSync, 5000);
-    }
-  };
-
-  // Make globally accessible for testing
-  window.SyncManager = { startSync, isInitialized: () => isInitialized };
-
-  return {
-    startSync,
-    isInitialized: () => isInitialized
+    DEFAULT_KATS
   };
 })();
 
@@ -582,20 +416,14 @@ const UI = (() => {
 
 // ===== TRANSACTIONS MODULE =====
 const Transactions = (() => {
-  let transactions = [];
-  let categories = {};
+  let transactions = Storage.loadTransactions();
+  let categories = Storage.loadCategories();
   let currentType = 'prihod';
-
-  // Initialize with data (will be called after Firebase loads)
-  const initialize = async () => {
-    transactions = await Storage.loadTransactions();
-    categories = await Storage.loadCategories();
-  };
 
   /**
    * Add new transaction
    */
-  const add = async (iznos, datum, opis, kat, tip = currentType) => {
+  const add = (iznos, datum, opis, kat, tip = currentType) => {
     // Validation
     const errors = {};
     
@@ -637,14 +465,14 @@ const Transactions = (() => {
     };
 
     transactions.unshift(tx);
-    await Storage.saveTransactions(transactions);
-    return { success: true, message: `Transakcija dodana: ${UI.fmt(iznos)}`, data: tx };
+    Storage.saveTransactions(transactions);
+    return { success: true, message: `Transakcija dodana: ${UI.fmt(iznos)}` };
   };
 
   /**
    * Update existing transaction
    */
-  const update = async (id, iznos, datum, opis, kat, tip) => {
+  const update = (id, iznos, datum, opis, kat, tip) => {
     const idx = transactions.findIndex(t => t.id === id);
     if (idx === -1) {
       return { success: false, message: 'Transakcija nije pronađena' };
@@ -683,20 +511,20 @@ const Transactions = (() => {
       kat
     };
 
-    await Storage.saveTransactions(transactions);
+    Storage.saveTransactions(transactions);
     return { success: true, message: 'Transakcija ažurirana' };
   };
 
   /**
    * Delete transaction
    */
-  const remove = async (id) => {
+  const remove = (id) => {
     if (!confirm('Obrisati transakciju?')) {
       return { success: false, message: 'Otkazano' };
     }
 
     transactions = transactions.filter(t => t.id !== id);
-    await Storage.saveTransactions(transactions);
+    Storage.saveTransactions(transactions);
     return { success: true, message: 'Transakcija obrisana' };
   };
 
@@ -761,18 +589,10 @@ const Transactions = (() => {
   const getType = () => currentType;
 
   /**
-   * Update data from Firebase
-   */
-  const _updateData = (newTransactions) => {
-    transactions = newTransactions;
-    Render.renderAll();
-  };
-
-  /**
    * Reload from storage
    */
-  const reload = async () => {
-    transactions = await Storage.loadTransactions();
+  const reload = () => {
+    transactions = Storage.loadTransactions();
   };
 
   return {
@@ -786,27 +606,18 @@ const Transactions = (() => {
     getById,
     setType,
     getType,
-    reload,
-    initialize,
-    _updateData
+    reload
   };
 })();
 
 // ===== CATEGORIES MODULE =====
 const Categories = (() => {
-  let categories = {};
-
-  /**
-   * Initialize categories
-   */
-  const initialize = async () => {
-    categories = await Storage.loadCategories();
-  };
+  let categories = Storage.loadCategories();
 
   /**
    * Add new category
    */
-  const add = async (type, name) => {
+  const add = (type, name) => {
     const trimmed = name.trim();
     
     if (!trimmed) {
@@ -822,14 +633,14 @@ const Categories = (() => {
     }
 
     categories[type].push(trimmed);
-    await Storage.saveCategories(categories);
+    Storage.saveCategories(categories);
     return { success: true, message: `Kategorija "${trimmed}" dodana` };
   };
 
   /**
    * Remove category
    */
-  const remove = async (type, name) => {
+  const remove = (type, name) => {
     if (categories[type].length <= 1) {
       return { success: false, message: 'Mora ostati barem jedna kategorija' };
     }
@@ -839,7 +650,7 @@ const Categories = (() => {
     }
 
     categories[type] = categories[type].filter(k => k !== name);
-    await Storage.saveCategories(categories);
+    Storage.saveCategories(categories);
     return { success: true, message: `Kategorija "${name}" obrisana` };
   };
 
@@ -854,27 +665,18 @@ const Categories = (() => {
   const getByType = (type) => categories[type] || [];
 
   /**
-   * Update data from Firebase
-   */
-  const _updateData = (newCategories) => {
-    categories = newCategories;
-  };
-
-  /**
    * Reload from storage
    */
-  const reload = async () => {
-    categories = await Storage.loadCategories();
+  const reload = () => {
+    categories = Storage.loadCategories();
   };
 
   return {
-    initialize,
     add,
     remove,
     getAll,
     getByType,
-    reload,
-    _updateData
+    reload
   };
 })();
 
@@ -949,7 +751,7 @@ const SalaryRecords = (() => {
     return data;
   };
 
-  const add = async (employeeId, datum, bruto, tax, insurance, other) => {
+  const add = (employeeId, datum, bruto, tax, insurance, other) => {
     if (!employeeId || !datum || !bruto || bruto <= 0) {
       return { success: false, errors: { amount: 'Iznos plate mora biti unet' } };
     }
@@ -975,7 +777,7 @@ const SalaryRecords = (() => {
     // Auto-add to Finance as expense
     const emp = Employees.getById(employeeId);
     if (emp) {
-      const result = await Transactions.add(neto, datum, `Plata: ${emp.name}`, 'Plate', 'rashod');
+      const result = Transactions.add(neto, datum, `Plata: ${emp.name}`, 'Plate', 'rashod');
       if (!result.success) {
         Storage.set('salaryRecords', records.filter(r => r.id !== newRecord.id));
         return { success: false, message: 'Greška pri dodavanju u finansije' };
@@ -1168,7 +970,7 @@ const Receipts = (() => {
     return { success: true, data: receipts[idx] };
   };
 
-  const markAsPaid = async (id, paidDate) => {
+  const markAsPaid = (id, paidDate) => {
     const receipts = getAll();
     const idx = receipts.findIndex(r => r.id === id);
     if (idx === -1) return { success: false, message: 'Prihodna nije pronađena' };
@@ -1176,14 +978,13 @@ const Receipts = (() => {
     const receipt = receipts[idx];
     
     // Create expense transaction using receipt's category
-    const txResult = await Transactions.add(receipt.amount, paidDate, `Prihodna: ${receipt.vendor}`, receipt.category, 'rashod');
+    const txResult = Transactions.add(receipt.amount, paidDate, `Prihodna: ${receipt.vendor}`, receipt.category, 'rashod');
     
     if (txResult.success) {
       receipts[idx] = {
         ...receipts[idx],
         status: 'paid',
-        paidDate,
-        expenseTransactionId: txResult.data?.id || null
+        paidDate
       };
       Storage.set('receipts', receipts);
       return { success: true, data: receipts[idx] };
@@ -1649,7 +1450,7 @@ function setType(t) {
 /**
  * Add new transaction
  */
-async function dodajTx() {
+function dodajTx() {
   // Clear previous errors
   UI.clearErrors();
 
@@ -1658,7 +1459,7 @@ async function dodajTx() {
   const opis = document.getElementById('f-opis').value.trim();
   const kat = document.getElementById('f-kat').value;
 
-  const result = await Transactions.add(iznos, datum, opis, kat);
+  const result = Transactions.add(iznos, datum, opis, kat);
 
   if (!result.success) {
     // Show field errors
@@ -1678,8 +1479,8 @@ async function dodajTx() {
 /**
  * Delete transaction
  */
-async function deleteTransaction(id) {
-  const result = await Transactions.remove(id);
+function deleteTransaction(id) {
+  const result = Transactions.remove(id);
   
   if (result.success) {
     UI.notify(result.message);
@@ -1738,7 +1539,7 @@ function closeEditModal() {
 /**
  * Save edited transaction
  */
-async function saveEditTransaction() {
+function saveEditTransaction() {
   const modal = document.getElementById('edit-modal');
   const txId = parseInt(modal.dataset.txId);
 
@@ -1758,7 +1559,7 @@ async function saveEditTransaction() {
   const kat = document.getElementById('edit-kat').value;
   
   const tx = Transactions.getById(txId);
-  const result = await Transactions.update(txId, iznos, datum, opis, kat, tx.tip);
+  const result = Transactions.update(txId, iznos, datum, opis, kat, tx.tip);
 
   if (!result.success) {
     // Show field errors
@@ -1792,11 +1593,11 @@ document.addEventListener('click', (e) => {
 /**
  * Add category
  */
-async function dodajKat(tip) {
+function dodajKat(tip) {
   const inp = document.getElementById(`new-kat-${tip}`);
   const name = inp.value.trim();
 
-  const result = await Categories.add(tip, name);
+  const result = Categories.add(tip, name);
   
   if (!result.success) {
     UI.showError(result.message);
@@ -1812,8 +1613,8 @@ async function dodajKat(tip) {
 /**
  * Delete category
  */
-async function deleteCategory(tip, name) {
-  const result = await Categories.remove(tip, name);
+function deleteCategory(tip, name) {
+  const result = Categories.remove(tip, name);
   
   if (result.success) {
     UI.notify(result.message);
@@ -2077,22 +1878,17 @@ function saveSalaryPayment() {
     return;
   }
 
-  SalaryRecords.add(empId, datum, bruto, tax, insurance, other).then((result) => {
-    if (result.success) {
+  const result = SalaryRecords.add(empId, datum, bruto, tax, insurance, other);
+  if (result.success) {
     UI.notify('Plata je isplaćena i dodana u finansije ✓', 'success');
     closeSalaryModal();
     renderPayrollList();
     Render.renderAll();
-    } else {
-      Object.keys(result.errors || {}).forEach(field => {
-        UI.showFieldError(`salary-${field}`, result.errors[field]);
-      });
-      if (result.message) UI.notify(result.message, 'error');
-    }
-  }).catch((e) => {
-    console.error('Salary save error:', e);
-    UI.notify('Greška pri isplati plate', 'error');
-  });
+  } else {
+    Object.keys(result.errors || {}).forEach(field => {
+      UI.showFieldError(`salary-${field}`, result.errors[field]);
+    });
+  }
 }
 
 function deleteSalaryRecord(recordId) {
@@ -2608,19 +2404,16 @@ function saveMarkPaid() {
   UI.clearErrors();
   if (!paidDate) { UI.showFieldError('mark-paid-date', 'Datum plaćanja je obavezan'); return; }
 
-  Receipts.markAsPaid(receiptId, paidDate).then((result) => {
-    if (result.success) {
-      UI.notify('Prihodna je označena kao plaćena ✓', 'success');
-      closeMarkPaidModal();
-      renderReceiptsList();
-      Render.renderAll();
-    } else {
-      UI.notify(result.message || 'Greška pri označavanju kao plaćene', 'error');
-    }
-  }).catch((e) => {
-    console.error('Mark paid error:', e);
-    UI.notify('Greška pri označavanju kao plaćene', 'error');
-  });
+  const result = Receipts.markAsPaid(receiptId, paidDate);
+  
+  if (result.success) {
+    UI.notify('Prihodna je označena kao plaćena ✓', 'success');
+    closeMarkPaidModal();
+    renderReceiptsList();
+    Render.renderAll();
+  } else {
+    UI.notify(result.message || 'Greška pri označavanju kao plaćene', 'error');
+  }
 }
 
 function renderReceiptsList() {
@@ -2729,60 +2522,22 @@ document.addEventListener('DOMContentLoaded', () => {
     payDatum.valueAsDate = new Date();
   }
 
-  // Initialize Firebase and load all data
-  async function initializeApp() {
-    try {
-      // Initialize Firebase
-      if (Storage.initFirebase) {
-        Storage.initFirebase();
-        console.log('✓ App initialized with Firebase');
-      }
-      
-      // Start real-time sync
-      if (SyncManager && SyncManager.startSync) {
-        await SyncManager.startSync();
-      }
-      
-      // Load data from Firebase
-      const txn = await Storage.loadTransactions();
-      const cats = await Storage.loadCategories();
+  // Initialize categories and render
+  UI.updateCategorySelect('prihod', Categories.getAll());
+  Render.renderAll();
 
-      // Load other modules data into cache for sync UI usage
-      Storage.dataCache.employees = await Storage.getAsync('employees');
-      Storage.dataCache.salaryRecords = await Storage.getAsync('salaryRecords');
-      Storage.dataCache.inventory = await Storage.getAsync('inventory');
-      Storage.dataCache.stockMovements = await Storage.getAsync('stockMovements');
-      Storage.dataCache.receipts = await Storage.getAsync('receipts');
-      Storage.dataCache.receiptCategories = await Storage.getAsync('receiptCategories');
-      
-      // Update categories
-      UI.updateCategorySelect('prihod', cats);
-      
-      // Render all UI
-      Render.renderAll();
+  // Initialize employees
+  renderEmployeesList();
+  renderPayrollList();
 
-      // Initialize employees
-      renderEmployeesList();
-      renderPayrollList();
+  // Initialize inventory
+  renderProductsList();
+  renderStockInList();
+  renderStockOutList();
 
-      // Initialize inventory
-      renderProductsList();
-      renderStockInList();
-      renderStockOutList();
+  // Initialize receipts
+  renderReceiptsList();
 
-      // Initialize receipts
-      renderReceiptsList();
-
-      // Set initial type
-      setType('prihod');
-      
-      console.log('✓ App fully loaded with live Firebase data - sharing enabled!');
-    } catch (e) {
-      console.error('Error initializing app:', e);
-      alert('⚠️ Error connecting to database. Make sure Firebase config in index.html is correct. Check console for details.');
-    }
-  }
-
-  // Start app initialization
-  initializeApp();
+  // Set initial type
+  setType('prihod');
 });

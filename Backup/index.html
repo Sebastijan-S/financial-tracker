@@ -3,37 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Skviz Tracking - Premium Financial Management App">
-  <meta name="theme-color" content="#0f172a">
-  <title>Skviz Tracking - Premium Financial Manager</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="description" content="Skviz Tracking - Jednostavna aplikacija za praćenje finansija kafića">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Skviz Tracking</title>
   <link rel="stylesheet" href="styles.css">
-  <!-- Firebase -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-    
-    // Replace with your Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyD49mTTxepHr4ZL-YDdtavf3sjLqPfW8MA",
-      authDomain: "kafic-finansije.firebaseapp.com",
-      databaseURL: "https://kafic-finansije-default-rtdb.firebaseio.com",
-      projectId: "kafic-finansije",
-      storageBucket: "kafic-finansije.firebasestorage.app",
-      messagingSenderId: "543466133024",
-      appId: "1:543466133024:web:9624a2ccbe3178986d8e45",
-      measurementId: "G-M5VMVX9JV5"
-    };
-
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const database = getDatabase(app);
-    
-    // Make database globally accessible
-    window.firebaseDB = database;
-  </script>
 </head>
 <body>
   <div class="app">
